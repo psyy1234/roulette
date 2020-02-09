@@ -14,6 +14,7 @@ Winnings
 '''
 
 import random
+import math
 
 # global variables
 
@@ -25,18 +26,38 @@ red = (1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36)
 black = (2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35)
 
 session = 50 #bets per session
-iterations = 10000 #number of sessions
+iterations = 1000 #number of sessions
+
+#print debug option
+debug = -1
 
 #betting values
+'''
+betNum - bet this amount on number
+betThird - bet this multiple of betNum on thirds
+betColor - bet this multiple of betNum on thirds
+upLimit - amount with which we are happy to end the session for the night
+downLimit - amount when we need to call it a night and end the play, we lost too much
+'''
 betNum = 1
 betThird = 20
 betColor = 30
-bet = (betNum*6 + betThird + betColor)
+upLimit = 1500
+downLimit = -1000
+
 tot = 0
 
-#mode: 0 - bet randomly; 1 - bet same if loss (need 'lost' variable); 2 - always bet the same
+'''
+mode:
+0 - bet randomly;
+1 - bet same if loss (need 'lost' variable);
+2 - always bet the same
+'''
 mode = 0
 lost = 'false'
+
+#increasing bet amounts factor (when <=1, there will be no increase)
+incrFactor = 2
 
 #max up/downswing
 maxDownSwing = 0
@@ -58,14 +79,13 @@ minSessTotal = 9999999999999
 minTotal = 9999999999999
 winsTotal = 0
 lossesTotal = 0
+cntLosses = 0
+cntWins = 0
 
 #total session wins/loss
 winCnt = 0
 lossCnt = 0
 allTotal = 0
-
-#print debug option
-debug = 0
 
 #create (number, color, third) tuple
 def addColors(numbers):
@@ -89,20 +109,29 @@ def play(type_ = 'french'):
 	return(withColors[pick-1])
 
 for j in range(0, iterations):
+	cntSessions = 1
+	betNum_ = betNum
+	bet = 6*betNum_ + betThird*betNum_ + betColor*betNum_
 	tot = 0
 	mod2 = 0
 	for i in range(0, session):
 		
+		if incrFactor > 1 and lost == 'true':
+			#betNum_ = math.pow(incrFactor, currDownSwing) * betNum
+			betNum_ = currDownSwing * ((betNum * incrFactor) - betNum) #incrFactor must be >= 1
+		elif lost == 'false':
+			betNum_ = betNum
+
+		bet = 6 * betNum_ + betThird*betNum_ + betColor*betNum_
 		tmpTot = -bet
 		
 		#choose third and color
-		if mode == 2 and mod2 == 0:
+		#mode 1: bet same numbers/third/color if lost previous
+		#mode 2: always same numbers/third/color
+		if mode == 0 or (mode == 1 and lost == 'false') or (mode == 2 and mod2 == 0):
 			third = random.randint(1,3)
 			color = 'red' if random.randint(1,2) == 1 else 'black'
 			mod2 = 1
-		elif mode == 0 or lost == 'false':
-			third = random.randint(1,3)
-			color = 'red' if random.randint(1,2) == 1 else 'black'
 
 		if debug > 2:
 			print('third chosen:', third, ' color chosen:', 'red' if color == 1 else 'black')
@@ -110,6 +139,7 @@ for j in range(0, iterations):
 		if debug > 0:
 			print('third:', third, '(',((third-1)*12)+1, '-', third*12, ')')
 			print('color:', color)
+			print('betNum_:', betNum_)
 		
 		#betting numbers
 		b = [x for x in red if x >= (third-1)*12 and x <= third*12] if color == 'red' else [x for x in black if x >= (third-1)*12 and x <= third*12]
@@ -125,12 +155,14 @@ for j in range(0, iterations):
 		winNum, winColor, winThird = ret
 		
 		if debug > 0:
+			print('Win type:', 'WIN' if winNum in b else 'THIRD ONLY' if winThird == third else 'COLOR' if winColor == color else 'LOSE')
 			print('Winning number:',ret)
 
+
 		#calculate current total winnings/loss
-		tmpTot += 36 * betNum if winNum in b else 0
-		tmpTot += 3 * betThird if winThird == third else 0
-		tmpTot += 2 * betColor if winColor == color else 0
+		tmpTot += 36 * betNum_ if winNum in b else 0
+		tmpTot += 3 * betThird*betNum_ if winThird == third else 0
+		tmpTot += 2 * betColor*betNum_ if winColor == color else 0
 
 		cntFullWin += 1 if winNum in b else 0
 		cntSemiWin += 1 if winNum not in b and tmpTot > 0 else 0
@@ -180,7 +212,12 @@ for j in range(0, iterations):
 			maxSessTotal = tot
 
 
-	
+		if tot <= downLimit or tot >= upLimit:
+			if debug >0:
+				print('LIMIT HAS BEEN REACHED. Last bet:', bet, 'Total:',tot)
+			break
+		cntSessions += 1
+
 	if debug > -1:
 		print('Session', j, 'stats:')
 		print('Max UP swing:', maxUpSwing)
@@ -191,6 +228,7 @@ for j in range(0, iterations):
 		print('Nr. semi wins:', cntSemiWin)
 		print('wins:', winCnt)
 		print('losses:', lossCnt)
+		print('total bets in session:',cntSessions)
 		print('win percentage', (winCnt/(winCnt+lossCnt)*100), '%')
 		print('Total win:', tot, '\n')
 	
@@ -207,9 +245,11 @@ for j in range(0, iterations):
 		maxTotal = maxSessTotal
 
 	if tot > 0:
-		winsTotal += 1
+		winsTotal += tot
+		cntWins += 1
 	else:
-		lossesTotal += 1
+		lossesTotal += tot
+		cntLosses += 1
 
 	allTotal += tot
 
@@ -226,6 +266,7 @@ for j in range(0, iterations):
 	lost = 'false'
 	cntSemiWin = 0
 	cntFullWin = 0
+	cntSessions = 1
 
 print('MODE:','bet random thirds and colors' if mode == 0 else 'bet same numbers until win' if mode == 1 else 'bet always same numbers')
 print('Total sessions:', iterations)
@@ -233,6 +274,8 @@ print('Bets per session:', session)
 print('MAX session:', maxWin)
 print('MIN session:', minWin)
 print('Average session win in', iterations, 'iterations of', session, ' bets per session:',allTotal/iterations)
-print('Winning sessions:', winsTotal)
-print('Losing sessions:', lossesTotal)
+print('Average winning session:', winsTotal/cntWins)
+print('Average losing session:', lossesTotal/cntLosses)
+print('Winning sessions:', cntWins)
+print('Losing sessions:', cntLosses)
 print('Min starting money needed in WORST session:', minTotal)
